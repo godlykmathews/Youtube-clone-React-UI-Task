@@ -1,15 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Alert,
   AppBar,
   Avatar,
   Badge,
   Box,
   Button,
   Chip,
+  CircularProgress,
   CssBaseline,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   InputBase,
+  Skeleton,
   Stack,
   ThemeProvider,
   Toolbar,
@@ -20,13 +26,13 @@ import {
 } from '@mui/material';
 import {
   AddCircleOutline,
+  Close,
   ExploreOutlined,
   HistoryOutlined,
   Home,
   Menu,
   Mic,
   MoreVert,
-  MovieCreationOutlined,
   NotificationsNone,
   OndemandVideoOutlined,
   PlayCircleFilled,
@@ -35,6 +41,9 @@ import {
   ThumbUpOutlined,
   VideoLibraryOutlined,
 } from '@mui/icons-material';
+import { formatPublishedAt } from './api/youtube.js';
+import { useVideos } from './hooks/useVideos.js';
+import VideoPlayer from './components/VideoPlayer.jsx';
 
 const theme = createTheme({
   palette: {
@@ -74,8 +83,6 @@ const categories = [
   'Podcasts',
   'Computer programming',
   'Recently uploaded',
-  'Watched',
-  'New to you',
 ];
 
 const sidebarItems = [
@@ -88,71 +95,19 @@ const sidebarItems = [
   { label: 'Liked videos', icon: <ThumbUpOutlined /> },
 ];
 
-const videos = [
-  {
-    id: 'Gl0lELDHSww',
-    title: 'End of Good 5G Networks?',
-    channel: 'Code Studio',
-    views: '1.2M views',
-    age: '2 weeks ago',
-    duration: '14:28',
-    category: 'React',
-    url: 'https://www.youtube.com/watch?v=Gl0lELDHSww',
-  },
-  {
-    id: 'VL4fYsv2q5A',
-    title: 'Day in my life as a Software Engineer at a Amazon',
-    channel: 'Design Lab',
-    views: '824K views',
-    age: '1 month ago',
-    duration: '21:06',
-    category: 'Computer programming',
-    url: 'https://www.youtube.com/watch?v=VL4fYsv2q5A',
-  },
-  {
-    id: 'oshQg1uSRvg',
-    title: 'Coding in 2026 - Vibe Coding',
-    channel: 'Focus Room',
-    views: '3.6M views',
-    age: '8 months ago',
-    duration: '1:02:44',
-    category: 'Music',
-    url: 'https://www.youtube.com/watch?v=oshQg1uSRvg',
-  },
-  {
-    id: 't0OsqyJ1M3c',
-    title: 'Top 5 Programming Languages to Learn in 2026',
-    channel: 'Frontend Mentor',
-    views: '476K views',
-    age: '3 days ago',
-    duration: '18:39',
-    category: 'React',
-    url: 'https://www.youtube.com/watch?v=t0OsqyJ1M3c',
-  },
-  {
-    id: 'NqXebyg7nCc',
-    title: 'Live session: UI patterns, state, and component design',
-    channel: 'Dev Stream',
-    views: '95K views',
-    age: 'Streamed 5 days ago',
-    duration: '2:11:09',
-    category: 'Live',
-    url: 'https://www.youtube.com/watch?v=NqXebyg7nCc',
-  },
-  {
-    id: 'iGe8TrCHN1E',
-    title: 'Creative video editing tricks every creator should know',
-    channel: 'Creator Desk',
-    views: '689K views',
-    age: '6 months ago',
-    duration: '11:52',
-    category: 'Recently uploaded',
-    url: 'https://www.youtube.com/watch?v=iGe8TrCHN1E',
-  },
-];
+function Header({ onSearch }) {
+  const [query, setQuery] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
-function Header() {
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    onSearch(query.trim());
+    setMobileSearchOpen(false);
+  }
+
   return (
+    <>
     <AppBar
       elevation={0}
       color="inherit"
@@ -175,7 +130,12 @@ function Header() {
           </IconButton>
         </Tooltip>
 
-        <Stack direction="row" alignItems="center" gap={0.5} sx={{ minWidth: 148 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          gap={0.5}
+          sx={{ minWidth: { xs: 0, sm: 148 }, flexGrow: { xs: 1, sm: 0 } }}
+        >
           <PlayCircleFilled sx={{ color: 'primary.main', fontSize: 34 }} />
           <Typography
             variant="h6"
@@ -191,6 +151,9 @@ function Header() {
         </Stack>
 
         <Stack
+          component="form"
+          role="search"
+          onSubmit={handleSubmit}
           direction="row"
           alignItems="center"
           sx={{
@@ -216,12 +179,15 @@ function Header() {
             <InputBase
               fullWidth
               placeholder="Search"
-              inputProps={{ 'aria-label': 'search videos' }}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              inputProps={{ 'aria-label': 'search videos', maxLength: 200 }}
               sx={{ fontSize: 16 }}
             />
           </Box>
           <Tooltip title="Search">
             <IconButton
+              type="submit"
               aria-label="search"
               sx={{
                 width: 64,
@@ -246,7 +212,11 @@ function Header() {
 
         <Stack direction="row" alignItems="center" gap={0.5}>
           <Tooltip title="Search">
-            <IconButton aria-label="search videos" sx={{ display: { sm: 'none' } }}>
+            <IconButton
+              aria-label="open video search"
+              onClick={() => setMobileSearchOpen(true)}
+              sx={{ display: { sm: 'none' } }}
+            >
               <Search />
             </IconButton>
           </Tooltip>
@@ -271,10 +241,49 @@ function Header() {
         </Stack>
       </Toolbar>
     </AppBar>
+    <Dialog
+      open={mobileSearchOpen}
+      onClose={() => setMobileSearchOpen(false)}
+      fullWidth
+      maxWidth="sm"
+      aria-labelledby="mobile-search-title"
+    >
+      <DialogTitle id="mobile-search-title">
+        Search videos
+        <IconButton
+          aria-label="close search"
+          onClick={() => setMobileSearchOpen(false)}
+          sx={{ position: 'absolute', right: 8, top: 8 }}
+        >
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Stack
+          component="form"
+          role="search"
+          onSubmit={handleSubmit}
+          direction="row"
+          spacing={1}
+          sx={{ pt: 1 }}
+        >
+          <InputBase
+            autoFocus
+            fullWidth
+            placeholder="Search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            inputProps={{ 'aria-label': 'search videos', maxLength: 200 }}
+          />
+          <IconButton type="submit" aria-label="search"><Search /></IconButton>
+        </Stack>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
-function Sidebar() {
+function Sidebar({ onHome }) {
   return (
     <Box
       component="aside"
@@ -297,6 +306,7 @@ function Sidebar() {
         {sidebarItems.slice(0, 3).map((item) => (
           <Button
             key={item.label}
+            onClick={item.label === 'Home' ? onHome : undefined}
             startIcon={item.icon}
             fullWidth
             sx={{
@@ -371,7 +381,7 @@ function Sidebar() {
   );
 }
 
-function CompactRail() {
+function CompactRail({ onHome }) {
   return (
     <Box
       component="nav"
@@ -389,6 +399,7 @@ function CompactRail() {
       {sidebarItems.slice(0, 5).map((item) => (
         <Button
           key={item.label}
+          onClick={item.label === 'Home' ? onHome : undefined}
           fullWidth
           sx={{
             display: 'flex',
@@ -410,7 +421,7 @@ function CompactRail() {
   );
 }
 
-function CategoryBar() {
+function CategoryBar({ selectedCategory, onSelect }) {
   return (
     <Box
       sx={{
@@ -434,21 +445,22 @@ function CategoryBar() {
           '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
-        {categories.map((category, index) => (
+        {categories.map((category) => (
           <Chip
             key={category}
             label={category}
             clickable
-            color={index === 0 ? 'default' : undefined}
+            onClick={() => onSelect(category)}
+            aria-pressed={category === selectedCategory}
             sx={{
               height: 34,
               borderRadius: 2,
-              bgcolor: index === 0 ? '#0f0f0f' : '#f2f2f2',
-              color: index === 0 ? '#ffffff' : 'text.primary',
+              bgcolor: category === selectedCategory ? '#0f0f0f' : '#f2f2f2',
+              color: category === selectedCategory ? '#ffffff' : 'text.primary',
               fontWeight: 600,
               px: 0.5,
               '&:hover': {
-                bgcolor: index === 0 ? '#0f0f0f' : '#e5e5e5',
+                bgcolor: category === selectedCategory ? '#0f0f0f' : '#e5e5e5',
               },
             }}
           />
@@ -458,7 +470,7 @@ function CategoryBar() {
   );
 }
 
-function VideoCard({ video, index }) {
+function VideoCard({ video, index, onPlay }) {
   return (
     <Box
       component="article"
@@ -467,12 +479,15 @@ function VideoCard({ video, index }) {
       }}
     >
       <Box
-        component="a"
-        href={video.url}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`Open ${video.title}`}
+        component="button"
+        type="button"
+        onClick={() => onPlay(video)}
+        aria-label={`Play ${video.title}`}
         sx={{
+          width: '100%',
+          p: 0,
+          border: 0,
+          cursor: 'pointer',
           display: 'block',
           position: 'relative',
           aspectRatio: '16 / 9',
@@ -485,9 +500,9 @@ function VideoCard({ video, index }) {
           },
         }}
       >
-        <Box
+        {video.thumbnail ? <Box
           component="img"
-          src={`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
+          src={video.thumbnail}
           alt=""
           loading="lazy"
           sx={{
@@ -496,8 +511,8 @@ function VideoCard({ video, index }) {
             objectFit: 'cover',
             transition: 'transform 180ms ease',
           }}
-        />
-        <Typography
+        /> : <PlayCircleFilled sx={{ color: 'text.secondary', fontSize: 52 }} />}
+        {video.isLive && <Typography
           component="span"
           variant="caption"
           sx={{
@@ -512,8 +527,8 @@ function VideoCard({ video, index }) {
             fontWeight: 700,
           }}
         >
-          {video.duration}
-        </Typography>
+          LIVE
+        </Typography>}
       </Box>
 
       <Stack direction="row" spacing={1.5} sx={{ pt: 1.5 }}>
@@ -533,12 +548,16 @@ function VideoCard({ video, index }) {
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" alignItems="flex-start" spacing={0.5}>
             <Typography
-              component="a"
-              href={video.url}
-              target="_blank"
-              rel="noreferrer"
+              component="button"
+              type="button"
+              onClick={() => onPlay(video)}
               variant="subtitle1"
               sx={{
+                border: 0,
+                p: 0,
+                bgcolor: 'transparent',
+                cursor: 'pointer',
+                textAlign: 'left',
                 color: 'text.primary',
                 textDecoration: 'none',
                 fontWeight: 700,
@@ -561,7 +580,7 @@ function VideoCard({ video, index }) {
             {video.channel}
           </Typography>
           <Typography variant="body2" color="text.secondary" noWrap>
-            {video.views} - {video.age}
+            {formatPublishedAt(video.publishedAt)}
           </Typography>
         </Box>
       </Stack>
@@ -569,7 +588,7 @@ function VideoCard({ video, index }) {
   );
 }
 
-function MobileNav() {
+function MobileNav({ onHome }) {
   return (
     <Box
       sx={{
@@ -594,6 +613,7 @@ function MobileNav() {
         ].map((item) => (
           <Button
             key={item.label}
+            onClick={item.label === 'Home' ? onHome : undefined}
             sx={{
               display: 'flex',
               flexDirection: 'column',
@@ -613,14 +633,111 @@ function MobileNav() {
   );
 }
 
+function VideoFeed({ params, title, onPlay }) {
+  const { videos, loading, error, nextPageToken, retry, loadMore } = useVideos(params);
+
+  return (
+    <Box sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
+      <Typography
+        component="h1"
+        variant="h6"
+        sx={{ mb: 2, fontWeight: 700, overflowWrap: 'anywhere' }}
+      >
+        {title}
+      </Typography>
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mb: 2 }}
+          action={<Button color="inherit" onClick={retry}>Retry</Button>}
+        >
+          {error}
+        </Alert>
+      )}
+      {!loading && !error && videos.length === 0 && (
+        <Typography role="status" color="text.secondary">
+          No videos found. Try a different search or category.
+        </Typography>
+      )}
+      <Box
+        aria-busy={loading}
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            xl: 'repeat(3, minmax(0, 1fr))',
+          },
+          gap: { xs: 3, md: 3.5 },
+        }}
+      >
+        {videos.map((video, index) => (
+          <VideoCard key={video.id} video={video} index={index} onPlay={onPlay} />
+        ))}
+        {loading && videos.length === 0 && Array.from({ length: 6 }, (_, index) => (
+          <Box key={index} aria-hidden="true">
+            <Skeleton variant="rounded" sx={{ aspectRatio: '16 / 9', height: 'auto' }} />
+            <Skeleton width="90%" height={28} />
+            <Skeleton width="60%" />
+          </Box>
+        ))}
+      </Box>
+      {loading && (
+        <Stack
+          direction="row"
+          justifyContent="center"
+          alignItems="center"
+          spacing={1}
+          sx={{ mt: 3 }}
+          role="status"
+        >
+          <CircularProgress size={22} />
+          <Typography>Loading videos…</Typography>
+        </Stack>
+      )}
+      {!loading && !error && nextPageToken && (
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Button variant="outlined" onClick={loadMore}>Load more videos</Button>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+const homeFeed = {
+  category: 'All',
+  title: 'Recommended videos',
+  params: { q: 'New', order: 'relevance' },
+};
+
 export default function App() {
+  const [feed, setFeed] = useState(homeFeed);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+
+  function selectCategory(category) {
+    const params = {
+      q: category === 'All' || category === 'Recently uploaded' ? 'New' : category,
+      order: category === 'Recently uploaded' ? 'date' : 'relevance',
+    };
+    if (category === 'Live') params.eventType = 'live';
+    setFeed({
+      category,
+      title: category === 'All' ? 'Recommended videos' : `${category} videos`,
+      params,
+    });
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-        <Header />
-        <Sidebar />
-        <CompactRail />
+        <Header onSearch={(query) => setFeed({
+          category: null,
+          title: `Search results for “${query}”`,
+          params: { q: query, order: 'relevance' },
+        })} />
+        <Sidebar onHome={() => setFeed(homeFeed)} />
+        <CompactRail onHome={() => setFeed(homeFeed)} />
 
         <Box
           component="main"
@@ -630,30 +747,23 @@ export default function App() {
             pb: { xs: 9, md: 4 },
           }}
         >
-          <CategoryBar />
-
-          <Box
-            sx={{
-              px: { xs: 2, sm: 3 },
-              py: 3,
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, minmax(0, 1fr))',
-                xl: 'repeat(3, minmax(0, 1fr))',
-              },
-              gap: { xs: 3, md: 3.5 },
-            }}
-          >
-            {videos.map((video, index) => (
-              <VideoCard key={video.id} video={video} index={index} />
-            ))}
-          </Box>
-
-        
+          <CategoryBar selectedCategory={feed.category} onSelect={selectCategory} />
+          <VideoFeed
+            key={new URLSearchParams(feed.params).toString()}
+            params={feed.params}
+            title={feed.title}
+            onPlay={setSelectedVideo}
+          />
         </Box>
 
-        <MobileNav />
+        <MobileNav onHome={() => setFeed(homeFeed)} />
+        {selectedVideo && (
+          <VideoPlayer
+            key={selectedVideo.id}
+            video={selectedVideo}
+            onClose={() => setSelectedVideo(null)}
+          />
+        )}
       </Box>
     </ThemeProvider>
   );
