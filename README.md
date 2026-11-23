@@ -60,6 +60,12 @@ With a subscribed key configured, check that the home feed loads, search for a t
 
 ## Production
 
+### Vercel
+
+Import this repository into Vercel. The included `vercel.json` builds the Vite app and `api/youtube/[endpoint].js` runs the API proxy as a Vercel Node function. Add **`RAPIDAPI_KEY`** to the project's server environment variables for Production (and Preview if needed), then deploy or redeploy. Do not use a `VITE_` prefix.
+
+### Node hosting
+
 ```sh
 npm run build
 npm start
